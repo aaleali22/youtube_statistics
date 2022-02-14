@@ -1,0 +1,285 @@
+---
+title: "What's Trending on Youtube?"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+# Introduction:
+| The data set our team decided to explore was a YouTube data set from Kaggle. This data set provided information about the trending videos from 2017 to 2018. The quantitative measurements we had access to were: views, likes, dislikes, number of comments, trending date, and release date. The original compiler of the data additionally categorized the videos into 32 categories. We were able to analyze the different variables associated with each video to help see what type of video will most likely become a trending video. The plots and data analysis in this R-Notebook are aimed at answering the following four questions:
+|  - What channels have the highest number of views? (Neha)
+|  - Which categories get the most comments? (Anthony)
+|  - What view count and comment count leads to trending? (Liam)
+|  - Which category spends the most days on trending on average?  (Ben and Aal)
+```{r, echo = FALSE, message=FALSE, warning=FALSE}
+#By "Neha Swamy, Anthony Neff, Liam Vinneau, Ben Horton and Syed Aal-E-Ali"
+#Data-Set Initiailization
+library("dplyr")
+library("rjson")
+library("tidyverse")
+library('ggplot2')
+
+path_to_USvidoes <- "USvideos.csv"
+path_to_JSON_file <- "US_category_id.json"
+main_youtube_dataset <- read.csv(file = path_to_USvidoes, fill = TRUE)
+main_ctg_object <- fromJSON(file = path_to_JSON_file)
+```
+# What channels and categories have the highest number of views? 
+Neha Swamy 
+
+```{r, echo = FALSE, message=FALSE, results=FALSE, warning=FALSE}
+# Source: https://statisticsglobe.com/rev-r-function
+reverse <- main_youtube_dataset[nrow(main_youtube_dataset):1,]
+
+# Source: https://www.rdocumentation.org/packages/dplyr/versions/0.7.8/topics/distinct
+unq <- reverse %>% distinct(title, .keep_all = TRUE)
+numeric_data <- data.frame(channel_title = unq$channel_title, 
+                           likes = unq$likes, 
+                           dislikes = unq$dislikes, 
+                           comment_count = unq$comment_count)
+# Source: https://stackoverflow.com/questions/1660124/how-to-sum-a-variable-by-group
+aggregated <- aggregate(numeric_data$likes, 
+                        by=list(channel_title=numeric_data$channel_title), 
+                        FUN=sum)
+
+sorted <- aggregated[order(-aggregated$x),]
+top_10 <- head(sorted, 10)
+
+barplot(top_10$x, 
+        names.arg = top_10$channel_title, 
+        main = "Top 10 Channels With the Most Likes",
+        ylab = "Likes", 
+        las=2, 
+        cex.axis=0.5, 
+        cex.names= .6,
+        cex.lab= 1.2
+        )
+#print(top_10$channel_title)
+```
+    Above is  a bar plot showcasing the top ten channels with the most likes. The channel with the most likes is ibighit, which is the channel of Big Hit Entertainment. This is not very surprising considering that BTS, the biggest K-Pop act globally, is under Big Hit Entertainment. Most of the channels in the top 10 are music channels: SMTOWN, Ed Sheeran, ChildishGambinoVEVO, jypentertainment, TaylorSwiftVEVO, and ArianaGrandeVEVO. SMTOWN and jypentertainment are two other channels that belong to K-Pop labels (SM Entertainment and JYP Entertainment).  
+
+# Which categories get the most comments? 
+Anthony Neff
+
+```{r, echo = FALSE, message=FALSE, results=FALSE, warning=FALSE}
+#there are 32 categories
+ctg_length = length(main_ctg_object[["items"]])
+ctg_list <- c()
+ctg_id_list <- c()
+for (i in seq(1,ctg_length)){
+  ctg_list <- c(ctg_list,main_ctg_object[["items"]][[i]][["snippet"]][["title"]])
+  ctg_id_list <- c(ctg_id_list ,main_ctg_object[["items"]][[i]][["id"]])
+}
+
+reverse <- main_youtube_dataset[nrow(main_youtube_dataset):1,]
+unq <- reverse %>% distinct(reverse$video_id, .keep_all = TRUE)
+
+category_counts <- unq %>% 
+  select(category_id, comment_count) %>% 
+  group_by(category_id) %>% 
+  summarise(comment_sum = sum(comment_count)) %>% 
+  mutate(comment_sum_thous = comment_sum/1000)
+
+# I want two columns, 
+# One for the categories
+# and one for the comment count
+ytb_comments <- main_youtube_dataset$comment_count
+ytb_ctg_id <- main_youtube_dataset$category_id
+col_length <- length(ytb_comments)
+ctg_id_nums <- strtoi(ctg_id_list, base = 10)
+
+#now sum up total comments for each category
+#the sum will be placed in the the index = id
+# so if the id = 2 then the sum will be added to the sum in index 2 of the ctg sum array. The correct placement of the values will be placed afterwards
+max_id <- max(ctg_id_nums )
+ctg_sums <-replicate(max_id,0)
+for (i in seq(1,col_length)){
+    id <- ytb_ctg_id[i]
+    num_comments <- ytb_comments[i]
+    ctg_sums[id] <-ctg_sums[id] + num_comments
+}
+#move items into a lined up array that matches up with the ctg_list category ids
+
+matched_ctg_sums <- replicate(ctg_length,0)
+for (i in seq(1,ctg_length)){
+  id_num <- ctg_id_nums[i]
+  comment_num <-ctg_sums[id_num] 
+  matched_ctg_sums[i] = comment_num
+}
+categories <-data.frame(names = ctg_list, ids = ctg_id_nums)
+category_names <- category_counts %>%
+    left_join(categories, by = c("category_id" = "ids"))
+
+
+ggplot(data = category_names, aes(x=names, y=comment_sum_thous)) +
+  geom_bar(stat='identity') +
+  ggtitle('                  Video Category VS Comment Count (Thousands)') +
+  xlab('Categories') +
+  ylab('Comments (Thousands)') + theme(axis.text.x = element_text(angle = 90))
+
+
+```
+    The graph above shows the comment count for each category of Youtube video. As shown, category 10, 'Music', had by far the most comments of any category. 'Entertainment', category 24, had the second most comments. 'Entertainment' and 'Music' were separated from the rest of the pack by a wide margin. 'People & Blogs', 'Comedy', and 'Howto & Style' rounded out the top 5 with a similar amount of comments. This data makes sense as each of the top 5 categories relates to popular culture. 
+\newpage
+
+# What view count and comment count leads to trending? 
+Liam Vienneau
+
+```{r, echo = FALSE, message=FALSE, results=FALSE, warning=FALSE}
+
+reverse <- main_youtube_dataset[nrow(main_youtube_dataset):1,]
+unq <- reverse %>% distinct(reverse$video_id, .keep_all = TRUE)
+
+#par(mfrow = c(1, 2))
+# plot 1
+#plot(x = 1:nrow(unq),unq$views, main = paste("Scatter Plot of Views"), xlab = "Unique Video", ylab = "Views")
+
+avg_views <- mean(unq$views)
+std_views <- sd(unq$views)
+view_dist <- dnorm(unq$views,mean = avg_views,sd = std_views)
+
+# plot of with-outliers and without
+
+
+#plot(unq$views,view_dist, main = paste("Normal Distribution of Views"), xlab = "Views", ylab = "Distribution")
+#abline(v = avg_views, col = "red", lty = 2, lwd = 3)
+
+trim_view_dist <- vector(mode = "double", length = nrow(unq)) 
+trim_view <- vector(mode = "double", length = nrow(unq))
+for (i in 1:nrow(unq)){
+  if (unq$views[i] < 2*10^7){
+    trim_view_dist[i] <- view_dist[i]
+    trim_view[i] <- unq$views[i]
+  }
+  else {
+    trim_view[i] <- NA
+    trim_view_dist[i] <- NA
+  }
+}
+plot(trim_view,trim_view_dist, main = paste("Normal Distribution of Views w/o Outliers"), xlab = "Views", ylab = "Distribution")
+abline(v = avg_views, col = "red", lty = 2, lwd = 3)
+abline(v = std_views, col = "blue", lty = 2, lwd = 3)
+
+min<- 10000000000
+for (i in seq(1,length(trim_view))){
+  if (!is.na(trim_view[i]) && trim_view[i]<min){
+    min <-trim_view[i] 
+  }
+  min
+}
+```
+
+  To better understand how many views a trending video has a plot of the normal distribution was used to visualize the data. A normal distribution could be used because the sample size is large, and so CLT could be applied.  The plot of the normal distribution excluded outliers since they compressed the data heavily since a coarser scale was required. This plot also includes the average view count which is marked by the red dotted line at 1,962,117 views. With a standard deviation of 7060057 most of the views are concentrated beneath 9022174 (mean + stdev). It can be said that a view count between the mean and one standard deviation is the typical view count for a trending video, but knowing that the lowest view count from the data set was 559 views, it is impossible to say with certainty that more views corresponds with becoming trending.
+
+
+```{r, echo = FALSE}
+avg_comment <- mean(unq$comment_count)
+std_comment <- sd(unq$comment_count)
+
+#par(mfrow = c(3, 1))
+comment_dist <- dnorm(unq$comment_count,mean = avg_comment,sd = std_comment)
+
+plot(unq$comment_count, comment_dist, main = paste("Normal Distribution of Comments w/ Outliers"), xlab = "Comment Count", ylab = "Distribution")
+abline(v = avg_comment, col = "red", lty = 2, lwd = 3)
+
+plot(unq$comment_count, comment_dist, main = paste("Normal Distribution of Comments w/o Outliers"), xlab = "Comment Count", ylab = "Distribution",xlim=c(-5,250000))
+abline(v = avg_comment, col = "red", lty = 2, lwd = 3)
+
+
+
+#comment count vs views with and w/o outliers
+
+##lot(unq$comment_count, unq$views, main = paste("Comment Count vs Views"), xlab = "Comment Count", ylab = "Views")
+trim_comment_count <- vector(mode = "double", length = nrow(unq)) 
+for (i in 1:nrow(unq)){
+  if (unq$comment_count[i] < 2*10^4){
+    trim_comment_count[i] <- unq$comment_count[i]
+  }
+  else {
+    trim_comment_count[i] <- NA
+  }
+}
+#plot(trim_comment_count, trim_view, main = paste("Comment Count vs Views w/o Outliers"), xlab = "Comment Count", ylab = "Views")
+
+
+```
+  Similar to view count, we wanted to know if comment count correlated with becoming a trending video. The normal distribution of comments yielded a similar plot to the view distribution, and so a plot excluding outliers was again utilized. In this case we included the original normal distribution with outliers so it could be seen how the data is compressed. With an average comment count of 6450, it can also be said that a high comment count does not correlate with becoming a trending video. 
+\newpage
+
+# Which category spends the most days on trending on average? 
+Ben Horton and Syed Aal-E-Ali
+
+```{r, echo = FALSE, message=FALSE, results=FALSE, warning=FALSE}
+#there are 32 categories
+ctg_length = length(main_ctg_object[["items"]])
+ctg_list <- c()
+ctg_id_list <- c()
+
+for (i in seq(1,ctg_length)){
+  ctg_list <- c(ctg_list,main_ctg_object[["items"]][[i]][["snippet"]][["title"]])
+  ctg_id_list <- c(ctg_id_list ,main_ctg_object[["items"]][[i]][["id"]])
+}
+
+# Average number of days a video from a cat is on trending
+sumappcat <- replicate(44,0)
+numvidspercat <- replicate(44,0)
+visited <- c()
+for (i in seq(length(main_youtube_dataset$video_id))){
+  if (!(main_youtube_dataset$video_id[i] %in% visited)){
+    visited <- c(visited,main_youtube_dataset$video_id[i])
+    numvidspercat[main_youtube_dataset$category_id[i]] <- numvidspercat[main_youtube_dataset$category_id[i]] + 1
+  }
+  sumappcat[main_youtube_dataset$category_id[i]] <- sumappcat[main_youtube_dataset$category_id[i]] + 1
+}
+offctgidlist <- replicate(length(ctg_list),0)
+counter <- 1
+#sumappcat
+#numvidspercat
+for (i in strtoi(ctg_id_list, base = 0L)) {
+  
+  if ( numvidspercat[i] > 0){
+    offctgidlist[counter] <- sumappcat[i]/numvidspercat
+  }
+  counter <- counter +1
+}
+
+x <- strtoi(ctg_id_list, base = 0L)
+ctg_list[16] <- "Science & Tech"
+#offctgidlist
+#ctg_list
+
+barplot(offctgidlist, names.arg = ctg_list,
+        main = "Average Number of Days On Trending by Category",
+        ylab = "Avg number of days on trending",
+        las=2, 
+        cex.axis= .5 , cex.names=.50)
+```
+    After plotting the average number of days a video spends on trending by category it is abundantly clear that videos from the entertainment category spend the longest amount of time on trending on average: ~30 days. Second to that is the music category at ~20 days on average. There is also a large number of categories that have no videos that made the trending videos lists. It is also clear that there may be some categories which contain videos that could be considered outliers because they may stay on trending for much longer than other videos from that category and vice-versa.
+
+
+# Conclusion
+
+The terms trending and popularity are usually associated with videos that have a large number of views, likes, and comments. Logically that makes sense and going into this project we all felt that this would be the case. Though to a certain extent we were correct in this assumption, there was more to the story. A considerably overpowering criteria seemed to be the categorization of the videos. Depending on which category a video was from seemed to be linked with how popular it was. We tried classifying popularity using the parameters above and looked at how the different categories or channels faired in terms of those quantifiers. We incorporated a time aspect to measure longevity and were also interested in finding out links between two parameters such as comments versus views. 
+
+By looking at the plot of channels vs likes, we can see that a majority of those channels are music channels that showcase popular bands or artists. The most likes went to BTS, which is a notably famous K-Pop band with millions of fans across the world. 
+
+Our next parameter of interest was comments. We thought that since people would need to put in more effort to respond to a video rather than liking it or viewing it, then that interaction should be classified as somewhat more meaningful than the number of likes or views. Though this may be the case, we are not able to discern positive comments from negative ones and so we find that it may not be the best measurement for positive popularity. However, we also felt that any topic that causes a large amount of discourse has the merit of being a trending video. After viewing the distribution of the comments, we realize that though it may certainly be helpful for a video to become trending, it is not always needed, since the average number of comments lies at just 6450. The two categories that stood out in terms of number of comments were music at number 1 and entertainment at number 2.
+
+The distribution of views paints a similar picture, and it becomes apparent that you do not need an extremely high number of views to hit trending either. Seeing however that a majority of the videos on trending have a view count of more than 9 million, it seems appropriate to say that a view count close to the mean or above would help your chances of becoming a trending video. 
+
+Lastly, we tried to calculate longevity of different categories. To quantify this characteristic, we decided to see which category spends the most days on trending on average. Interestingly, entertainment won in terms of longevity, with a video from entertainment spending on average, 30 days on trending. Music videos came second with an average of 20 days. The remaining categories were all under 13 days showing that entertainment and music videos outlive the other categories by a large margin. 
+
+The overall analysis we did on the YouTube data set culminates into the prediction that you would have a higher chance getting on YouTube’s trending list of videos if you were to release a music or entertainment video, since those two categories seem to outpace the others by a great deal in most of the quantifiable comparisons we conducted.
+
+# Future Work
+  One question that could be interesting to explore is if and how comment count correlates with view count. A scatter plot of this data was constructed but because it was outside the scope of "What makes a YouTube video trend" and due to space restrictions it was decided to not include the plot. In the plot it appeared that there may have been a weak correlation. 
+
+|Here is a small list of questions we were also curious about that, if given the time and space, would have been interesting to look at:
+
+| - Whether or not the categories with the highest number of days of videos on trending would be the same if outliers were removed.
+| - If there were specific videos that contributed greatly to the comment count within individual categories, and how the data would look if those outliers were removed.
+| - How likes are correlated with views, comments, etc. in a specific category (like music or entertainment or example)
+| - If a video which becomes trending increases its views quicker than comparable videos which did not hit trending.
+| - It would be interesting to be able to compare this data to videos that didn't make it trending list and maybe certain factors would become more apparent. 
+
+
+
