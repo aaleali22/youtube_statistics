@@ -10,3 +10,5 @@ The plots and data analysis in this R-Notebook are aimed at answering the follow
 - Which categories get the most comments? 
 - What does the distribution of the comments and the views look like? 
 - Which category spends the most days on trending on average? 
+Data Set from	https://www.kaggle.com/datasnaek/youtube-new?select=USvideos.csv
+
